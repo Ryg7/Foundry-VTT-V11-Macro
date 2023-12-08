@@ -1,0 +1,297 @@
+//Macro by RygS (12/2023)
+
+//Change with your sound files path
+const torchSound_Path = "Sound/FIRE_Essence%20prend%20feu.wav";
+const campfireSound_Path = "Sound/Fireplace%20Sounds.mp3";
+
+//Torch light specification
+const torchAnimation_Data = {
+	rotation: 0,
+	walls: true,
+	vision: false,
+	config: {
+		alpha: 0.5,
+		angle: 360,
+		bright: 3.18,
+		coloration: 1,
+		dim: 6.37,
+		attenuation: 0.5,
+		luminosity: 0.6,
+		saturation: 0,
+		contrast: 0.25,
+		shadows: 0,
+		animation: {
+			type: "torch",
+			speed: 4,
+			intensity: 2,
+			reverse: false
+		},
+		darkness: {
+			min: 0,
+			max: 1
+		},
+		color: null
+	},
+	hidden: false
+}
+
+//Campfire light Specification
+const campfireAnimation_Data = {
+	rotation: 0,
+	walls: true,
+	vision: false,
+	config: {
+		alpha: 0.8,
+		angle: 360,
+		bright: 6,
+		coloration: 1,
+		dim: 15,
+		attenuation: 0.5,
+		luminosity: 0.6,
+		saturation: 0,
+		contrast: 0.25,
+		shadows: 0,
+		animation: {
+			type: "torch",
+			speed: 5,
+			intensity: 1,
+			reverse: false
+		},
+		darkness: {
+			min: 0,
+			max: 1
+		},
+		color: "#dfb10c"
+	},
+	hidden: false
+}
+
+//Torch sound specification
+const torchSound_Data = {
+	path: torchSound_Path,
+	radius: 5,
+	easing: true,
+	walls: true,
+	volume: 0.75,
+	darkness: {
+		min: 0,
+		max: 1
+	},
+	repeat: true,
+	hidden: false
+}
+
+//Campfire sound Specification
+const campfireSound_Data = {
+	path: campfireSound_Path,
+	radius: 12,
+	easing: true,
+	walls: true,
+	volume: 0.5,
+	darkness: {
+		min: 0,
+		max: 1
+	},
+	repeat: true,
+	hidden: false
+    }
+
+// This function convert all light to "torch" on the current scene and add sound at the same position
+async function updateAllLights() {
+	const updates = canvas.scene.lights.map(l => ({
+		_id: l.id,
+		y: l.y,
+		...torchAnimation_Data,
+		x: l.x
+		})
+	);
+	await canvas.scene.updateEmbeddedDocuments("AmbientLight", updates);
+	//
+	//delete sound if exist at the same position (x;y)
+	const allSounds = canvas.scene.sounds;
+	const lights = canvas.lighting.placeables;
+	lights.forEach(light => {
+		allSounds.forEach(sound => {
+			if (light.x === sound.x && light.y === sound.y) {
+				const sonASupprimerIndex = allSounds.find(sound_tmp => sound_tmp.id === sound.id);
+				sonASupprimerIndex.delete();
+			}
+		});
+	});
+	//
+	//create sound matrix 
+	const addTorchSound = canvas.scene.lights.map(l => ({
+		y: l.y,
+		...torchSound_Data,
+		x: l.x
+		})
+	);
+	await canvas.scene.update({ sounds: addTorchSound });
+	//
+	ui.notifications.info("Terminé");
+}
+
+// This function convert a light to "torch" or "campfire" on the current scene and add sound at the same position
+async function updateSelectedLight(lightID, animationType) {
+    const selectedLight = canvas.scene.lights.get(lightID);
+	//
+    if (selectedLight) {
+		//delete sound if exist
+		const allSounds = canvas.scene.sounds;
+		//
+		allSounds.forEach(sound => {
+			if (selectedLight.x === sound.x && selectedLight.y === sound.y) {
+				const soundToDeleteIndex = allSounds.find(sound_tmp => sound_tmp.id === sound.id);
+				soundToDeleteIndex.delete();
+			}
+		});
+		//
+		switch (animationType) {
+			case "torch":
+				//turn light to "torch"
+				const updatesTorch = [{
+					_id: selectedLight.id,
+					y: selectedLight.y,
+					...torchAnimation_Data,
+					x: selectedLight.x
+				}];
+				//
+				await canvas.scene.updateEmbeddedDocuments("AmbientLight", updatesTorch);
+				//
+				//add torch sound at the same position
+				const addTorchSound = [{
+					y: selectedLight.y,
+					...torchSound_Data,
+					x: selectedLight.x
+				}];
+				//
+				await canvas.scene.update({ sounds: addTorchSound });
+				//
+				break;
+			case "campfire":
+				//turn light to "campfire"
+				const updatescampfire = [{
+					_id: selectedLight.id,
+					y: selectedLight.y,
+					...campfireAnimation_Data,
+					x: selectedLight.x
+				}];
+				//
+				await canvas.scene.updateEmbeddedDocuments("AmbientLight", updatescampfire);
+				//
+				//add torch sound at the same position
+				const addCampfireSound = [{
+					y: selectedLight.y,
+					...campfireSound_Data,
+					x: selectedLight.x
+				}];
+				//
+				await canvas.scene.update({ sounds: addCampfireSound });
+				//
+				break;
+			default:
+				ui.notifications.warn("Invalide option. [${animationType}]");
+				break;
+		}
+    } else {
+        ui.notifications.warn("Light Id not found.");
+    }
+}
+
+// this function load the dialogbox to select the the light transformation
+async function showLightOptions() {
+	const dialogOptions = {
+		id: "lightOptionSelector",
+		width: 320
+	}
+    let dialogEditor = new Dialog({
+        title: "Light convertion option",
+        content: `
+			<style>
+			  #lightOptionSelector .dialog-button { margin: auto; min-width: 200px; }
+			  #lightOptionSelector .light { min-width: 200px; }
+			  #lightOptionSelector .lightHeightened { min-width: 200px; }
+			</style>
+			Choisissez les modifications de lumière.
+			`,
+        buttons: {
+			torchAll: {
+				icon: "<i class='fas fa-fire'></i>",
+				label: `Torch (All light)`,
+				callback: () => {
+					updateAllLights()
+					//dialogEditor.render(true)
+				}
+			},
+			torchSelected: {
+				icon: "<i class='fas fa-fire'></i>",
+				label: `Torch (Only one)`,
+				callback: () => {
+					selectLightID('torch');
+					//dialogEditor.render(true)
+				}
+			},
+			campfireSelected: {
+				icon: "<i class='fas fa-fire'></i>",
+				label: `Campfire (Only one)`,
+				callback: () => {
+					selectLightID('campfire');
+					//dialogEditor.render(true)
+			  }
+			}
+		},
+        default: "Close",
+        close: () => { }
+    }, dialogOptions)
+
+    dialogEditor.render(true)
+}
+
+// Fonction pour afficher la fenêtre contextuelle avec les choix
+async function selectLightID(lightTemplateType) {
+	const htmlLightId = `
+		<form>
+		  <h2>Past your Light ID</h2>
+		  <div class="form-group">
+			<label>Light ID:</label>
+			<input type="text" id="light-id" name="light-id" placeholder="Enter Light ID">
+		  </div>
+		</form>
+		`;
+
+	const dialogOptions = {
+		id: "lightIdInput",
+		width: 320
+	}
+
+	let dialogSelector = new Dialog({
+	  title: `Light ID`,
+	  content: htmlLightId,
+	  buttons: {
+		confirm: {
+		  icon: "<i class='fas fa-tick'></i>",
+		  label: `Confirm`,
+		  callback: htmlLightId => { 
+			let lightID = htmlLightId.find('input[name="light-id"]').val()
+			if (lightID!== '') {
+				updateSelectedLight(lightID, lightTemplateType);
+			}
+		  }
+		},
+		cancel: {
+		  icon: "<i class='fas fa-times'></i>",
+		  label: `Cancel`,
+		  callback: () => {
+			//dialogSelector.render(true);
+		  }
+		},
+	  },
+	  default: "cancel",
+	  close: () => { }
+	}, dialogOptions)
+	//
+	dialogSelector.render(true)
+}
+
+// Appeler la fonction pour afficher la fenêtre contextuelle
+showLightOptions();
