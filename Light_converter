@@ -1,4 +1,5 @@
 //Macro by RygS (12/2023)
+//For Foundry VTT V11
 
 //Change with your sound files path
 const torchSound_Path = "Sound/FIRE_Essence%20prend%20feu.wav";
